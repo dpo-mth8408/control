@@ -2,8 +2,8 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
-    email: votre.adresse@polymtl.ca
+  - name: Ouépya Chris David Fogué
+    email: Ouépiya-chris-david.fogue@etud.polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
 format:
@@ -28,11 +28,96 @@ engine: julia
 VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 using Pkg
 Pkg.activate("labo9_env")
+Pkg.add("OptimalControl")
+Pkg.add("OptimalControl")
+Pkg.add("NLPModelsIpopt")
+Pkg.update("OptimalControl")
+Pkg.update("NLPModelsIpopt")
+Pkg.add("Ipopt")
+Pkg.add("Plots")
+Pkg.add("CTModels")
+Pkg.add("CTParser")
+using OptimalControl
+using NLPModelsIpopt
+using Plots
 ```
 
 # Question 1
 
 Répondre à l'exercice 1 du laboratoire 8.
+```{julia}
+#= 
+Problème de contrôle optimal pour la minimisation de la longueur d'arc
+Formulation mathématique :
+Minimiser ∫sqrt(1 + u(t)²) dt sous les contraintes :
+- Dynamique : dx/dt = u(t)
+- Conditions aux limites : x(0)=0, x(1)=1
+=#
+
+# Paramètres temporels et conditions aux limites
+t0 = 0   # Temps initial
+tf = 1   # Temps final
+x0 = 0   # État initial
+xf = 1   # État final
+
+#= 
+Définition du problème de contrôle optimal (OCP) :
+Objectif : Minimiser la longueur d'arc de la trajectoire
+=#
+ocp = @def begin
+    # Intervalle temporel
+    t ∈ [ t0, tf ], time
+
+    # Variables du système
+    x ∈ R, state   # État du système (position)
+    u ∈ R, control # Variable de contrôle (vitesse)
+
+    # Conditions aux limites
+    x(t0) == x0    # Condition initiale
+    x(tf) == xf    # Condition finale
+
+
+    # Équation dynamique du système
+    ẋ(t) == u(t)
+
+    # Objectif à minimiser
+    ∫( √(1 + u(t)^2) ) → min
+end
+
+```
+
+```{julia}
+# Résolution numérique du problème de contrôle optimal
+sol = solve(ocp)
+
+#= 
+Visualisation des résultats :
+- plotstates : Affiche l'évolution de l'état x(t)
+- plotcontrol : Affiche le contrôle optimal u(t) 
+- plotadjoints : Affiche les variables adjointes (co-états)
+=#
+#plot(sol)
+plot(sol, plotstates=true, plotcontrol=true, plotadjoints=true)
+
+```
+
+
+## Résultats et interprétation
+
+### Solution optimale obtenue
+
+L'analyse des résultats montre que la solution numérique correspond  à la solution théorique attendue. L'état `x(t)` suit une évolution linéaire entre sa valeur initiale `x(0)=0` et sa valeur finale `x(1)=1`, confirmant que la trajectoire optimale est bien une droite, solution attendue pour ce problème de minimisation de longueur d'arc.
+
+Le contrôle optimal `u(t)` maintient une valeur constante égale à 1 tout au long de l'intervalle temporel. Ce résultat est en cohérence avec l'équation du système `ẋ(t) = u(t)`, où une vitesse constante produit effectivement un déplacement linéaire.
+Les variables adjointes présentent une décroissance linéaire très légère.
+
+### Performances numériques
+
+La résolution numérique a démontré une efficacité au niveau de :
+- la convergence atteinte en seulement 2 itérations
+- du temps de calcul très court (1.234 secondes)
+- et de la valeur de l'objectif égale à `√2`, correspondant à la solution analytique
+
 
 # Question 2
 
@@ -40,29 +125,166 @@ Répondre à l'exercice 1 du laboratoire 8.
 
 ```{julia}
 # votre code ici
+#= 
+Problème de contrôle optimal pour une trajectoire minimisant l'énergie potentielle
+avec contraintes de position initiale/finale.
+
+Paramètres physiques et conditions aux limites :
+- t0, tf : temps initial et final
+- a, b   : positions horizontales initiale et finale
+- L      : déplacement vertical final
+- ρ      : densité linéique (kg/m)
+- g      : accélération gravitationnelle (m/s²)
+=#
+
+t0 = 0    # [s] Temps initial
+tf = 1    # [s] Temps final
+a = 1     # [m] Position horizontale initiale
+b = 3     # [m] Position horizontale finale  
+L = 2.5   # [m] Déplacement vertical final
+ρ = 1     # [kg/m] Densité linéique
+g = 9.81  # [m/s²] Accélération gravitationnelle
+
+
+#= 
+Définition du problème de contrôle optimal (OCP) :
+Minimise l'énergie potentielle sous contraintes dynamiques
+=#
+ocp = @def begin
+    # Domaine temporel
+    t ∈ [ t0, tf ], time
+
+    # Variables :
+    x ∈ R², state  
+    u ∈ R, control 
+
+    # Conditions aux limites :
+    x(t0) == [a, 0]     # Condition initiale
+    x(tf) == [b, L]     # Condition finale
+
+    # Dynamique du système
+    ẋ(t) == [u(t), √(1 + u(t)^2)]
+
+    # Objectif à minimiser
+    ∫(ρ * g * x[1](t) * √(1 + u(t)^2)) → min
+end 
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+# Résolution
+sol = solve(ocp)
+
+# Visualisation des résultats :
+# - États (position horizontale et verticale)
+# - Contrôle optimal (pente u(t))
+# - Variables adjointes (co-états)
+plot(sol, plotstates=true, plotcontrol=true, plotadjoints=true)
+
 ```
 
 #### Commenter les résultats
+
+### Analyse des résultats
+
+Les résultats obtenus pour la question 2 montrent la résolution d'un problème de contrôle optimal visant à minimiser l'énergie potentielle d'une trajectoire sous contraintes dynamiques. Le solveur IPOPT a été utilisé pour résoudre ce problème, avec les observations suivantes :
+
+Les graphes générés montrent l'évolution des variables d'état, des co-états et du contrôle au cours du temps :  
+
+1. **État (x)** :  
+   - La variable d'état évolue de manière régulière, passant de 1.0 à 2.5, conformément aux conditions aux limites imposées (\(x(t_0) = 1\), \(x(t_f) = 2.5\)).  
+
+2. **Co-état** :  
+   - Le co-état montre une décroissance vers zéro, reflétant l'optimisation de la trajectoire pour minimiser l'énergie potentielle.  
+
+3. **Contrôle (u)** :  
+   - Le contrôle varie entre 0 et 6, avec des ajustements dynamiques pour respecter les contraintes et minimiser l'objectif.  
+
+4. **Convergence** :  
+   - Le solveur a convergé vers une solution optimale après 914 itérations, avec un temps total de calcul de 8.879 secondes environ.  
+   - La valeur finale de l'objectif est de \(4.46 \times 10^1\), ce qui représente l'énergie potentielle minimisée.  
+
+La résolution du problème de contrôle optimal a été réalisée avec succès. Les résultats numériques et les graphes confirment que la trajectoire optimale satisfait les contraintes tout en minimisant l'énergie potentielle. Ces observations sont cohérentes avec les attentes théoriques.
+
 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
 ```{julia}
-# votre code ici
+#= 
+Problème de contrôle optimal avec dynamique non-linéaire et contrôle contraint
+Objectif : Maximiser la composante x₂ à l'instant final sous contraintes dynamiques
+
+Formulation mathématique :
+Maximiser x₂(tf) sous les contraintes :
+- Dynamique : dx₁/dt = -x₁ + u
+              dx₂/dt = √x₁
+- Contrôle contraint : 0 ≤ u(t) ≤ 1
+- Conditions initiales : x₁(0)=0, x₂(0)=0
+- Condition finale : x₁(tf)=0.5
+=#
+
+# Paramètres temporels et conditions aux limites
+t0 = 0         # Temps initial
+tf = 1         # Temps final
+x1_initial = 0  # État initial premier composant
+x2_initial = 0  # État initial second composant
+x1_final = 0.5  # Condition finale sur x₁
+
+#= 
+Définition du problème de contrôle optimal (OCP) :
+Objectif : Maximiser x₂(tf) (reformulé comme minimisation de -x₂(tf))
+=#
+ocp = @def begin
+    # Intervalle temporel
+    t ∈ [ t0, tf ], time 
+
+    # Variables du système
+    x ∈ R², state      # État du système [x₁, x₂]
+    u ∈ R, control     # Variable de contrôle contrainte
+
+    # Conditions aux limites
+    x(t0) == [x1_initial, x2_initial]    # Condition initiale
+    x(tf)[1] == x1_final                 # Condition finale partielle
+
+    # Contrainte sur le contrôle
+    0 ≤ u(t) ≤ 1
+    
+    # Dynamique du système
+    ẋ(t) == [-x[1](t) + u(t), sqrt(x[1](t)) ]  
+    
+    # Objectif: maximiser x2(tf)
+    - x[2](tf)  → min
+end
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+#Résolution numérique du problème
+#sol = solve(ocp, print_level=5)
+sol = solve(ocp, tol=1e-6)
+
+#= 
+Visualisation des résultats :
+- plotstates : Évolution des états x₁(t) et x₂(t)
+- plotcontrol : Commande optimale u(t)
+- plotadjoints : Variables adjointes (pour analyse)
+=#
+plot(sol, plotstates=true, plotcontrol=true, plotadjoints=true)
 ```
 
 #### Commenter les résultats
 
+### Analyse des états (state)
+L'évolution des états montre que la composante \( x_1(t) \) part de 0 et atteint la condition finale \( x_1(t_f) = 0.5 \) à \( t = 1 \). La trajectoire est croissante et présente une non-linéarité, reflétant l'influence de la dynamique \( \dot{x}_1 = -x_1 + u \). La composante \( x_2(t) \), qui représente l'objectif à maximiser, augmente de manière monotone avec une pente décroissante, en cohérence avec la dynamique \( \dot{x}_2 = \sqrt{x_1} \). La valeur finale de \( x_2(t_f) \) est d'environ 0.48, ce qui correspond à l'objectif optimisé.
+
+### Analyse du coétat (costate)
+Les variables adjointes (coétats) illustrent les multiplicateurs de Lagrange associés aux contraintes dynamiques. Le coétat lié à \( x_1 \) montre une décroissance rapide vers des valeurs négatives, indiquant un coût élevé pour respecter la dynamique en début de trajectoire. Celui associé à \( x_2 \) reste constant (proche de -1), conformément à l'objectif de maximisation de \( x_2(t_f) \), car la dynamique de \( x_2 \) ne dépend pas directement de \( x_2 \) lui-même.
+
+### Analyse du contrôle (control)
+La commande optimale \( u(t) \) évolue entre les bornes \( [0, 1] \). Elle démarre à une valeur élevée (proche de 0.4) pour satisfaire rapidement la condition finale sur \( x_1 \), puis décroît progressivement. Cette décroissance reflète un compromis entre la maximisation de \( x_2 \) et la contrainte sur \( x_1(t_f) \).
