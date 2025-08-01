@@ -51,8 +51,15 @@ Cependant, le module `OptimalControl.jl` ne permet pas l'utilisation d'une contr
 \begin{align*}
 \dot{z}(t) & = h(x(t), \dot{x}(t), t) \\
 z(t) & = \int_0^1 \dot{z}(t) dt = 0 \\
-z(t) & = z(1) - z(0) = 0 \\
-z(1) & = z(0)
+& \quad z(1) - z(0) = 0 \\
+& \quad z(1) & = z(0)
+\end{align*}
+
+Bref, le problème devient : 
+\begin{align*}
+  \min_x \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \dot{z}(t) = h(x(t), \dot{x}(t), t) \\
+                & z(0) = 0, \ z(1) = 0,
 \end{align*}
 
 # Question 2
@@ -91,8 +98,8 @@ Tel que précisé à la question #1, il n'est pas possible de passer une contrai
 
 \begin{align*}
 \dot{z}(t) & = \sqrt{1 + \dot{x}(t)^2} \\ 
-& \to \int_0^1 \dot{z}(t) dt & = L \\
-& \to z(1) - z(0) & = L\\
+& \to \int_0^1 \dot{z}(t) dt = L \\
+& \to z(1) - z(0) = L\\
 \end{align*}
 
 La variable de contrôle $u(t)$ est définie telle que : 
@@ -125,8 +132,6 @@ ocp = @def begin
   x(t0) == [a, 0.0]   # z(0) = 0
   x(t1) == [b, L]     # z(1) = L -> z(1) - z(0) = L
 
-  # derivative(x)(t) = u(t)
-  # derivative(z)(t) = √(1 + u(t)^2)
   ẋ(t) == [u(t), √(1 + u(t)^2)]
 
   # objective function
