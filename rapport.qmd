@@ -2,7 +2,7 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
+  - name: Nicolas Jouglet
     email: votre.adresse@polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
@@ -24,45 +24,173 @@ engine: julia
 ---
 
 ```{julia}
+
+# VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 #| output: false
-VERSION == v"1.11.5" || error("please use julia version 1.11.5")
+
 using Pkg
 Pkg.activate("labo9_env")
+
+# Pkg.add("OptimalControl")
+# Pkg.add("Plots")
+# Pkg.add("NLPModelsIpopt")
+
 ```
+
 
 # Question 1
 
 Répondre à l'exercice 1 du laboratoire 8.
+
+Soit : 
+
+
+$$\begin{aligned}
+  \min_x \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \int_0^1 h(x(t), \dot{x}(t), t) \, \mathrm{d}t = 0 \\
+                & x(0) = x_0, \ x(1) = x_1,
+\end{aligned}
+$$
+
+Pour transformer une contrainte isopérimétrique en un problème standard de commande optimale,  
+on introduit une nouvelle variable d’état $z(t)$ définie par :
+
+$$
+z(t) = \int_0^t h(x(s), \dot{x}(s), s)\,\mathrm{d}s
+\quad \Longrightarrow \quad 
+\dot{z}(t) = h(x(t), \dot{x}(t), t), \quad z(0)=0
+$$
+
+Ainsi, la contrainte intégrale devient une **condition finale** :
+
+$$
+z(1) = \int_0^1 h(x(t), \dot{x}(t), t)\,\mathrm{d}t = 0
+$$
+
+Le problème s’écrit alors comme un problème de **commande optimale classique** :
+
+$$
+\begin{aligned}
+\min_{x,u}\ & \int_0^1 f(x(t),u(t),t)\,\mathrm{d}t \\
+\text{s.t. }& \dot{x}(t)=u(t),\quad x(0)=x_0,\ x(1)=x_1, \\
+            & \dot{z}(t)=h(x(t),u(t),t),\quad z(0)=0,\ z(1)=0.
+\end{aligned}
+$$
+
+Ce changement supprime la contrainte intégrale au profit d’une contrainte finale sur l’état $z$.
+
+
 
 # Question 2
 
 #### Répondre à l'exercice 2 du laboratoire 8 (modélisation et résolution du problème de la corde suspendue).
 
 ```{julia}
-# votre code ici
+
+using OptimalControl, Plots, NLPModelsIpopt
+
+# Paramètres
+t0, tf = 0.0, 1.0
+a, b   = 1.0, 3.0
+ρ, g, L = 1.0, 9.81, 4.0
+
+ocp = @def begin
+    t ∈ [t0, tf], time
+    x ∈ R², state         # x[1] = hauteur, x[2] = intégrale de longueur
+    u ∈ R, control        # u = pente
+
+    # Conditions initiales et finales
+    x[1](t0) == a
+    x[1](tf) == b
+    x[2](t0) == 0
+    x[2](tf) == L         # contrainte de longueur finale
+
+    # Dynamique du système
+    ẋ(t)==[u(t), sqrt(1 + u(t)^2)]
+
+    # Objectif : minimiser l'énergie potentielle
+     ∫(ρ * g * x[1](t) * sqrt(1 + u(t)^2))→ min
+end
+
+# Résolution
+sol = solve(ocp, max_iter=600, tol=1e-5)
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+plot(sol)
 ```
 
 #### Commenter les résultats
+
+L'état $x_1(t)$ est en forme de U, la corde descend d'abord, atteint un minimum puis remonte. Ce comportement était prévisible et est cohérent avec ce que l'on attendait. 
+$x_2(t)$ représente l'intégrale de la corde, la courbe de cet état est strictement croissante et atteint la longueur souhaitée L=4 au temps final. 
+
+Les états adjoints $\lambda_1$ a tendance à fortement augmenter à la fin, ce comportement reflète la pénalité lié à l'aumentation de l'energie potentiel du système, or c'est à la fin que la corde est la plus haute et donc que son ennergie potentiel est le plus haut aussi. 
+Quand à $\lambda_2$, sa valeur reste constante et reflète la contrainte d'intégrale de longueur imposée à la corde. 
+
+Le controle u(t) commence légerement négativement pour faire descendre la corde puis augmente progressivement. On constate un saut final qui représente la satisfaction de la condition de transversalité. 
+
 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
 ```{julia}
-# votre code ici
+using OptimalControl, Plots
+
+# Paramètres
+t0, tf = 0.0, 1.0
+
+ocp = @def begin
+    t ∈ [t0, tf], time
+    x ∈ R², state       # x[1] = niveau réservoir 1, x[2] = niveau réservoir 2
+    u ∈ R¹, control     # débit vers réservoir 1
+
+    # Conditions initiales
+    x[1](t0) == 0
+    x[2](t0) == 0
+
+    # Condition finale sur x1
+    x[1](tf) == 0.5
+
+    # Dynamique des réservoirs
+    ẋ(t) == [-x[1](t) + u[1](t),x[1](t)]
+    
+
+    # Bornes sur le contrôle
+    0 ≤ u(t) ≤ 1
+
+    # Objectif : minimiser  -x2(1)
+        -x[2](tf) → min
+  end
+
+# Résolution
+sol = solve(ocp, max_iter=200, tol=1e-6)
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
-```
 
+# Visualisation
+plot(sol)
+```
 #### Commenter les résultats
 
+
+$x_1(t)$ : niveau du réservoir 1. Il monte quand u=1, puis décroît naturellement quand u=0.
+
+$x_2(t)$ : niveau du réservoir 2. Il augmente uniquement via le transfert depuis $x_1$.
+
+$u(t)$ : le débit optimal est bang-bang : u = 1 pour remplir rapidement le réservoir 1 et alimenter le réservoir 2 puis u = 0 pour que $x_1$ décroisse vers la valeur finale 0.5. Ce résultat était prévisible car H est linéaire en u (car $\dot x [1]=$)
+
+$\lambda_1(t)$ (co-état associé à ​$x_1$ ) décroît : le remplissage devient moins rentable à mesure que l’on approche de la contrainte finale.
+
+$\lambda_2(t)$ reste quasiment constant : chaque litre transféré dans $x_2$  a la même valeur finale dans l’objectif.
+
+
+Les co-états trouvées ne sont pas similaire à ceux trouvés dans le devoir 5, ceci s'explique par le fait qu'ils soit égaux à une constante multiplicative près ( H est linéaire par rapport au vecteur des co-états p donc si p(t) est solution de $\dot{p}(t) = -\frac{\partial H}{\partial x}(x^*(t), p(t), u^*(t))$,  $\alpha p(t)$ est aussi solution)
