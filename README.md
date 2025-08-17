@@ -1,4 +1,4 @@
-# Méthode de la pénalité quadratique
+# Introduction à la commande optimale
 
 1. Créez un *fork* de ce dépôt sur votre compte GitHub ;
 2. clonez votre *fork* en local ;
