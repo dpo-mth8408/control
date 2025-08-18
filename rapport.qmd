@@ -156,9 +156,9 @@ end
 # Résolution du problème
 sol_reservoirs = solve(ocp_reservoirs, max_iter = 500, tol = 1.0e-6)
 
-println("Niveau final du réservoir 1: ", sol_reservoirs.state[1,end])
-println("Niveau final du réservoir 2: ", sol_reservoirs.state[2,end])
-println("Valeur de l'objectif : ", sol_reservoirs.objective)
+#println("Niveau final du réservoir 1: ", sol_reservoirs.state[1,end])
+#println("Niveau final du réservoir 2: ", sol_reservoirs.state[2,end])
+#println("Valeur de l'objectif : ", sol_reservoirs.objective)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
@@ -168,7 +168,7 @@ println("Valeur de l'objectif : ", sol_reservoirs.objective)
 plot(sol_reservoirs)
 
 # Affichage des informations sur la solution
-println("Valeur objective (niveau max réservoir 2): ", sol_reservoirs.objective)
+#println("Valeur objective (niveau max réservoir 2): ", sol_reservoirs.objective)
 ```
 
 #### Commenter les résultats
