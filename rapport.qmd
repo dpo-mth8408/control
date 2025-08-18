@@ -31,9 +31,9 @@ engine: julia
 using Pkg
 Pkg.activate("labo9_env")
 
-# Pkg.add("OptimalControl")
-# Pkg.add("Plots")
-# Pkg.add("NLPModelsIpopt")
+Pkg.add("OptimalControl")
+Pkg.add("Plots")
+Pkg.add("NLPModelsIpopt")
 
 ```
 
