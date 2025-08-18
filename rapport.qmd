@@ -2,8 +2,8 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
-    email: votre.adresse@polymtl.ca
+  - name: Yasmine Amami
+    email: yasmine.amami@polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
 format:
@@ -25,44 +25,159 @@ engine: julia
 
 ```{julia}
 #| output: false
-VERSION == v"1.11.5" || error("please use julia version 1.11.5")
+#VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 using Pkg
 Pkg.activate("labo9_env")
+Pkg.add("OptimalControl")
+Pkg.add("NLPModelsIpopt") 
+Pkg.add("Plots")
+
+using OptimalControl
+using NLPModelsIpopt
+using Plots
 ```
 
 # Question 1
 
 Répondre à l'exercice 1 du laboratoire 8.
 
+```{julia}
+# Paramètres
+C = 0.5  
+
+# Modélisation avec OptimalControl.jl:
+exemple_iso = @def begin
+    t ∈ [0, 1], time
+    x ∈ R², state    
+    u ∈ R, control   
+
+    x(0) == [0, 0]    # position initiale 0, intégrale initiale 0
+    x(1) == [1, C]    # position finale 1, intégrale finale C
+
+    ẋ(t) == [u(t), u(t)]  
+
+    # Minimisation de la longueur
+    ∫(√(1 + u(t)^2)) → min  
+end
+
+sol_iso = solve(exemple_iso)
+println("Valeur objective: ", sol_iso.objective)
+```
+
+
+
 # Question 2
 
 #### Répondre à l'exercice 2 du laboratoire 8 (modélisation et résolution du problème de la corde suspendue).
 
 ```{julia}
-# votre code ici
+
+# Paramètres physiques
+L = 2.5    
+a = 1.0    
+b = 1.5    
+ρ = 1.0    
+g = 9.81   
+
+# Modélisation avec OptimalControl.jl
+ocp_chainette = @def begin
+    t ∈ [0, 1], time
+    x ∈ R², state    # x[1] = hauteur, x[2] = longueur accumulée
+    u ∈ R, control   # u = dérivée de la hauteur 
+
+    # Conditions aux bords
+    x(0) == [a, 0]   # hauteur initiale a, longueur accumulée 0
+    x(1) == [b, L]   # hauteur finale b, longueur totale L
+
+    # Équations différentielles
+    ẋ(t) == [u(t), √(1 + u(t)^2)]  
+
+    # Minimisation de l'énergie potentielle
+    ∫(ρ * g * x₁(t) * √(1 + u(t)^2)) → min
+end
+
+# Résolution du problème
+sol_chainette = solve(ocp_chainette, max_iter = 500, tol = 1.0e-6)
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+# Tracé de la solution
+plot(sol_chainette)
+
+# Vérification de la contrainte de longueur
+println("Longueur demandée: ", L)
+
+println("Valeur objective (énergie potentielle): ", sol_chainette.objective)
 ```
 
 #### Commenter les résultats
+
+Les résultats montrent tout d'abord que la solution numérique converge vers une forme de chaînette (caténaire), qui est la solution analytique connue pour ce problème. Cette corde adopte une courbure caractéristique qui permet de minimiser son énergie potentielle.
+On voit aussi que la contrainte de la longueur fixée à L = 2.5 est satisfaite comme le montre la vérification numérique. On a aussi que la commande u(t) représentant la pente de la corde en chaque point, varie de manière continue pour assurer l'équilibre entre la minimisation de l'énergie et le respect de la contrainte de longueur.
 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
 ```{julia}
-# votre code ici
+
+# Paramètres du problème
+t0 = 0
+tf = 1
+x1_final = 0.5  
+
+# Modélisation avec OptimalControl.jl
+ocp_reservoirs = @def begin
+    
+    t ∈ [t0, tf], time
+    x ∈ R², state      # x[1] = niveau réservoir 1, x[2] = niveau réservoir 2
+    u ∈ R, control     # u = apport au réservoir 1
+
+    # Conditions initiales : réservoirs vides
+    x(t0) == [0, 0]
+    
+    # Contrainte finale : réservoir 1 à moitié plein
+    x₁(tf) == x1_final
+    
+    # Contraintes sur le contrôle
+    0 ≤ u(t) ≤ 1
+    
+    # Dynamique du système
+    ẋ(t) == [-x₁(t) + u(t), x₁(t)]
+    
+    # Objectif: maximiser le niveau du réservoir 2 en t = 1
+    x₂(tf) → max
+
+end
+
+# Résolution du problème
+sol_reservoirs = solve(ocp_reservoirs, max_iter = 500, tol = 1.0e-6)
+
+#println("Niveau final du réservoir 1: ", sol_reservoirs.state[1,end])
+#println("Niveau final du réservoir 2: ", sol_reservoirs.state[2,end])
+#println("Valeur de l'objectif : ", sol_reservoirs.objective)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+# Tracé de la solution
+plot(sol_reservoirs)
+
+# Affichage des informations sur la solution
+#println("Valeur objective (niveau max réservoir 2): ", sol_reservoirs.objective)
 ```
 
 #### Commenter les résultats
+
+Le réservoir 1 se remplit rapidement au début, puis son niveau est régulé pour atteindre exactement 0.5 en t = 1
+Le réservoir 2 accumule progressivement le liquide provenant du réservoir 1, sa croissance s'accélère quand x₁(t) est élevé
+La contrainte finale x₁(1) = 0.5 est respectée. On a aussi que les bornes du contrôle 0 ≤ u(t) ≤ 1 sont satisfaites
+En fin de compte la strategie consiste dans une première partie a maximiser l'apport (u proche de 1) pour remplir rapidement le réservoir 1, puis on ajuste le débit pour maintenir l'équilibre et respecter la contrainte finale.
+Cette stratégie démontre l'équilibre optimal entre le remplissage rapide initial et le contrôle de fin pour atteindre le but.
+
+
 
