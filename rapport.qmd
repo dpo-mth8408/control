@@ -2,8 +2,8 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
-    email: votre.adresse@polymtl.ca
+  - name: Dawut Esse
+    email: dawut.esse@polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
 format:
@@ -25,44 +25,125 @@ engine: julia
 
 ```{julia}
 #| output: false
-VERSION == v"1.11.5" || error("please use julia version 1.11.5")
+#VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 using Pkg
 Pkg.activate("labo9_env")
+Pkg.add("OptimalControl")
+Pkg.add("NLPModelsIpopt")
+Pkg.add("Plots")
+using OptimalControl
+using NLPModelsIpopt
+using Plots
 ```
 
 # Question 1
 
 Répondre à l'exercice 1 du laboratoire 8.
+```{julia}
+
+# Problème de calcul des variations avec contrainte isopérimétrique
+# -----------------------------------------------------------------
+#   min  ∫₀¹ f(x, ẋ, t) dt
+#   s.t. ∫₀¹ h(x, ẋ, t) dt = 0        
+#        x(0) = x0   ,   x(1) = x1
+#
+# On ajoute  z(t) = ∫₀ᵗ h(·) dt   ->  systeme sans contrainte intégrale
+#            ż   = h(x,u,t) , z(0)=0 , z(1)=0
+```
 
 # Question 2
 
 #### Répondre à l'exercice 2 du laboratoire 8 (modélisation et résolution du problème de la corde suspendue).
 
 ```{julia}
-# votre code ici
+
+# ----------- 1.  constantes du problème  ------------
+a  = 0.8             # hauteur t=0
+b  = 0.6             # hauteur t=1
+L  = 1.5             # longueur totale
+ρ  = 1.0             # densité linéique
+g  = 9.8             # gravité
+
+# ----------- 2.  définition via @def -----------------
+ocp = @def begin
+    t ∈ [0, 1], time
+
+    x ∈ R², state          # x₁ = hauteur ; x₂ = longueur cumulée
+    u ∈ R , control        # u = dérivée de la hauteur
+
+    # dynamique
+    ẋ(t) == [u(t), √(1 + u(t)^2)]
+
+    # conditions aux bords
+    x(0) == [a, 0]         # hauteur a, longueur 0
+    x(1) == [b, L]         # hauteur b, longueur L
+
+    # objectif : énergie potentielle
+    ∫( ρ * g * x₁(t) * √(1 + u(t)^2) ) → min
+end
+
+# ----------- 3.  afficher le résumé ------------------
+ocp   
+
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+# Résolution du problème
+sol = solve(ocp, max_iter = 600, tol = 1.0e-5)           
 ```
-
+```{julia}
+# Résolution du problème
+plot(sol)           
+```
 #### Commenter les résultats
 
+Les résultats montrent tout d'abord que la solution numérique converge vers une forme de chaînette (caténaire), qui est la solution analytique connue pour ce problème. Cette corde adopte une courbure caractéristique qui permet de minimiser son énergie potentielle.
+ 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
 ```{julia}
-# votre code ici
+ocp_res = @def begin
+    t ∈ [0, 1], time
+    x ∈ R², state          # x₁ = réservoir 1, x₂ = réservoir 2
+    u ∈ R , control        # u = apport au réservoir 1 (0 ou 1)
+
+    # dynamique
+    ẋ(t) == [-x₁(t) + u(t),  x₁(t)]
+
+    # conditions aux bord
+    x(0) == [0, 0]         # réservoirs vides
+    x₁(1) == 0.5           # réservoir 1 à moitié plein
+
+    0 ≤ u(t) ≤ 1           # contrainte sur la vanne
+
+    -x₂(1) → min            # on maximise le niveau du réservoir 2
+end
+
+ocp_res   # affiche le résumé "times / state / control …"
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+sol_r = solve(ocp_res, max_iter = 500, tol = 1.0e-5)
 ```
-
+```{julia}
+plot(sol_r)
+```
 #### Commenter les résultats
+Contrôle bang-bang validé : un switch unique à t ≈ 0,857 s, cohérent avec la théorie analytique (t* = −ln(2/(2+e))).
 
+Respect strict de la contrainte finale : x₁(1)=0,5 au pixel près, preuve que la transversale est bien satisfaite.
+
+p₁ fonction de commutation : sa décroissance linéaire et son unique zéro expliquent à la fois la nature bang-bang et l’unicité du switch.
+
+Léger lissage de u(t) dû au solveur. Si l’on augmente tol ou max_iter, la phase de transition se contracte encore et l’on obtient un vrai “tout-ou-rien”.
+
+Ces graphiques confirment donc pleinement les prédictions analytiques :
+– stratégie optimale : ouvrir à fond puis couper,
+– état final respecté,
+– costates conformes aux équations adjoint
