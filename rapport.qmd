@@ -2,8 +2,8 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
-    email: votre.adresse@polymtl.ca
+  - name: Mouhtal Oussama 
+    email: oussama-2.mouhtal@polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
 format:
@@ -24,45 +24,200 @@ engine: julia
 ---
 
 ```{julia}
+#| echo: false
 #| output: false
-VERSION == v"1.11.5" || error("please use julia version 1.11.5")
+#VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 using Pkg
 Pkg.activate("labo9_env")
+Pkg.activate("intro-opt-control")
+Pkg.add("OptimalControl")
+Pkg.add("NLPModelsIpopt")
+Pkg.add("Plots")
+
+using OptimalControl
+using NLPModelsIpopt
+using Plots
 ```
 
 # Question 1
 
-Répondre à l'exercice 1 du laboratoire 8.
+Soit le problème suivant : 
+
+\begin{align*}
+  \min_x \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \int_0^1 h(x(t), \dot{x}(t), t) \, \mathrm{d}t = 0 \\
+                & x(0) = x_0, \ x(1) = x_1,
+\end{align*}
+
+Posons $\dot{y}(t) = h(x(t), \dot{x}(t), t)$, la contrainte intégrale devient 
+\begin{equation*}
+  \int_0^1 h(x(t), \dot{x}(t), t) \, \mathrm{d}t = \int_0^1 \dot{y}(t)\, \mathrm{d}t = y(1) - y(0)
+\end{equation*}
+Le problème devient,
+\begin{align*}
+  \min_{x, y} \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \dot{y}(t) = h(x(t), \dot{x}(t), t) \\
+                x(0) = x_0, \ & x(1) = x_1, \ y(1) = y(0),
+\end{align*}
+Pour retrouver un problème de commande optimale, on pose $\dot{x}(t) = u(t)$,
+\begin{align*}
+  \min_{x,y,u} \ & \int_0^1 f(x(t), u(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ \dot{x}(t) = u(t) ,\ & \dot{y}(t) = h(x(t), u(t), t) \\
+                x(0) = x_0, \ & x(1) = x_1, \ y(1) = y(0),
+\end{align*}
+
+## Remarque 
+
+La variable d'état $y(t)$ n'agit qu'à partir de sa dérivée dans le problème, donc une translation de $$y(t)$ n'affecte pas sa dérivée, ce qui nous permet de fixer $y(0)$ par exemple à $y(0) =0 $, le problème se simplifie donc à :
+\begin{align*}
+  \min_{x,y,u} \ & \int_0^1 f(x(t), u(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ \dot{x}(t) = u(t) \, & \dot{y}(t) = h(x(t), u(t), t) \\
+                x(0) = x_0, \ & x(1) = x_1, \ y(1) = y(0) = 0,
+\end{align*}
 
 # Question 2
 
 #### Répondre à l'exercice 2 du laboratoire 8 (modélisation et résolution du problème de la corde suspendue).
 
+## Modélisation du problème
+L'énergie potentiel de la corde est minimale lorsqu'elle se stabilise.
+Le problème peut se modéliser sous cette forme avec contraintes isopérimitrique :
+
+\begin{align*}
+ \min_{x} \quad & \rho g \int_0^1 x(t) \sqrt{1 +  \dot{x}(t)^2} \, dt \\
+\text{s.t} \quad 
+& \int_0^1 \sqrt{1 + \dot{x}(t)^2} \, dt = L,\\
+& x(0) = a, \quad x(1) = b.
+\end{align*}
+
+Utilisons le résultat de la première question, on obtient :
+\begin{align*}
+ \min_{x \, y \,u} \quad & \rho g \int_0^1 x(t) \sqrt{1 + u(t)^2} \, dt \\
+\text{s.t} \quad 
+& \dot{x}(t) = u(t) \, \dot{y}(t) = \sqrt{1 + u(t)^2} - L\\
+& x(0) = a, \quad x(1) = b, \\
+& y(1) = y(0) = 0.
+\end{align*}
 ```{julia}
-# votre code ici
+t0 = 0
+tf = 1
+g = 9.8    # gravité
+x0 = a = 1.0    # hauteur à t=0
+xf = b = 2.0    # hauteur à t=1
+y0 = yf = 0.0
+L = 2.5    # longueur de la corde
+ρ = 1.0    # densité 
+
+ocp = @def begin
+
+    t ∈ [ t0, tf ], time
+    x ∈ R², state
+    u ∈ R, control
+
+    x(t0) == [x0, y0]
+    x(tf) == [xf, yf]
+
+    ẋ(t) == [u(t), sqrt(1 + u(t)^2) - L]
+
+    ∫( ρ * g * x1(t)sqrt(1 + u(t)^2) ) → min         # énergie potentielle
+
+end
+```
+
+```{julia}
+sol = solve(ocp)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+plt = plot(sol)
+savefig(plt, "solution.png")
 ```
+![](solution.png)
 
 #### Commenter les résultats
+
+- Premièrement, la corde prend une forme parabolique, ce qui paraît intuitif. De même, la fonction $p_1(t)$ est une fonction non constante, comme vu en cours.
+
+- En ce qui concerne le temps d'exécution, le solveur utilisé a nécessité beaucoup d'itérations pour converger. On observe une convergence superlinéaire lors des dernières itérations.
 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
+
+\begin{align*}
+\max_{x_1,\, x_2,\, u} \quad & x_2(1) \\
+\text{s.t} \quad 
+& \dot{x}_1(t) = -x_1(t) + u(t), \\
+& \dot{x}_2(t) = x_1(t), \\
+& x_1(0) = 0, \quad x_2(0) = 0, \\
+& x_1(1) = \frac{1}{2}, \\
+& 0 \leq u(t) \leq 1, \quad \forall t \in [0, 1].
+\end{align*}
+
 ```{julia}
-# votre code ici
+t0 = 0.0
+tf = 1.0
+
+ocp = @def  begin
+  t ∈ [t0, tf], time
+  x ∈ R², state
+  u ∈ R, control
+  
+  x(t0) == [0.0, 0.0]    # L'état des réservoires à t = 0
+  ẋ(t) == [-x1(t) + u(t), x1(t) ]
+  x1(tf) == 0.5       # L'état du réservoires à t = 0
+  0 ≤ u(t) ≤ 1        # Control
+
+  x2(tf) → max
+end
+```
+
+
+```{julia}
+sol = solve(ocp)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
-# votre code ici
+plt = plot(sol)
+savefig(plt, "solution2.png")
 ```
+![](solution2.png)
 
 #### Commenter les résultats
 
+- Le problème suivant est de nature \emph{bang-bang}. Ce que je remarque, c’est que le réservoir 1 dépasse, en un temps inférieur à 1, la moitié du réservoir. À partir de ce moment, le contrôle devient nul afin que le réservoir soit à moitié plein à $t_f = 1$.
+  
+- Dans ce deuxième problème, j’ai imposé que le réservoir ne soit pas rempli à plus de la moitié avant $t_f$. On obtient alors un contrôle non lisse, avec de fortes variations, qui tente de se compenser pour que le réservoir atteigne la moitié de sa capacité à l’instant final.
+
+
+
+```{julia}
+t0 = 0.0
+tf = 1.0
+
+ocp = @def  begin
+  t ∈ [t0, tf], time
+  x ∈ R², state
+  u ∈ R, control
+  
+  x(t0) == [0.0, 0.0]    # L'état des réservoires à t = 0
+  ẋ(t) == [-x1(t) + u(t), x1(t) ]
+  x1(tf) == 0.5       # L'état du réservoires à t = 0
+  x1(t) ≤ 0.5  
+  0 ≤ u(t) ≤ 1        # Control
+
+  x2(tf) → max
+end
+sol = solve(ocp)
+```
+
+```{julia}
+plt = plot(sol)
+savefig(plt, "solution3.png")
+```
+![](solution3.png)
