@@ -2,8 +2,8 @@
 title: "Rapport de laboratoire 5"
 subtitle: "MTH8408"
 author:
-  - name: Votre nom
-    email: votre.adresse@polymtl.ca
+  - name: Oihan Cordelier
+    email: oihan.cordelier@polymtl.ca
     affiliation:
       - name: Polytechnique Montréal
 format:
@@ -12,9 +12,7 @@ format:
     documentclass: article
     include-in-header:
       - text: |
-            \usepackage{eulervm}
             \usepackage{xspace}
-            \usepackage[francais]{babel}
     geometry:
       - margin=1in
     papersize: letter
@@ -25,44 +23,190 @@ engine: julia
 
 ```{julia}
 #| output: false
-VERSION == v"1.11.5" || error("please use julia version 1.11.5")
+#VERSION == v"1.11.5" || error("please use julia version 1.11.5")
 using Pkg
 Pkg.activate("labo9_env")
+Pkg.add("OptimalControl")
+Pkg.add("NLPModelsIpopt")
+Pkg.add("Plots")
+
+using OptimalControl, NLPModelsIpopt
+using Plots
 ```
 
 # Question 1
 
 Répondre à l'exercice 1 du laboratoire 8.
 
+Pour l'exercice 1 du laboratoire 8, nous sommes intéressés à résoudre le problème : 
+
+\begin{align*}
+  \min_x \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \int_0^1 h(x(t), \dot{x}(t), t) \, \mathrm{d}t = 0 \\
+                & x(0) = x_0, \ x(1) = x_1,
+\end{align*}
+
+Cependant, le module `OptimalControl.jl` ne permet pas l'utilisation d'une contrainte intégrale. Il faut donc trouver une autre formulation au problème pour le rendre compatible avec le module. La reformulation peut se faire comme suit : 
+
+\begin{align*}
+\dot{z}(t) & = h(x(t), \dot{x}(t), t) \\
+z(t) & = \int_0^1 \dot{z}(t) dt = 0 \\
+& \quad z(1) - z(0) = 0 \\
+& \quad z(1) & = z(0)
+\end{align*}
+
+Bref, le problème devient : 
+\begin{align*}
+  \min_x \ & \int_0^1 f(x(t), \dot{x}(t), t) \, \mathrm{d}t \\
+  \text{s.t.} \ & \dot{z}(t) = h(x(t), \dot{x}(t), t) \\
+                & z(0) = 0, \ z(1) = 0,
+\end{align*}
+
 # Question 2
 
 #### Répondre à l'exercice 2 du laboratoire 8 (modélisation et résolution du problème de la corde suspendue).
 
+Pour l'exercice 2 du laboratoire 8, nous sommes intéressé au problème suivant : 
+Une corde de longueur $L > 0$ est suspendue en $t = 0$ à une hauteur $a > 0$ et en $t = 1$ à une hauteur $b > 0$.
+On peut supposer la corde non élastique, souple, et de densité uniforme $\rho > 0$.
+On cherche à déterminer la forme $x(t)$ de la corde lorsqu'elle se stabilise sous l'effet de la gravité.
+
+La forme de la corde sous l'effet de la gravité va être déterminée par le minimum de l'énergie potentielle de la corde. À noter que la corde reste toute de même contrainte par sa longueur. 
+
+Pour une section de corde indinitésimale, son énergie potentielle est définie comme suit :
+
+\begin{align*}
+dE_{pot} & = dm.g.h \\
+& = dm.g.x(t) \\
+& = \rho . dl. g . x(t) \\
+& = \rho \sqrt{1 + \dot{x}(t)^2} .g .x(t) \\
+\end{align*}
+
+L'énergie potentielle totale de la corde se trouve donc en faisant l'intégrale, ce qui nous donne l'objectif à minimiser : 
+
+\begin{align*}
+\min_{x} \int_0^1 \rho g \sqrt{1 + \dot{x}(t)^2} x(t) dt
+\end{align*}
+
+À noter que pour l'objectif, $\rho$, ainsi que $g$ n'ont pas d'impact sur la solution puisqu'ils sont constants. De plus, comme mentionné plus tôt, la corde à une longueur fixe qui doit rester constante. La longueur de la corde peut s'écrire sous la forme intégrale de la longueur d'un arc : 
+
+\begin{align*}
+L = \int_0^1 \sqrt{1 + \dot{x}(t)^2} dt
+\end{align*}
+
+Tel que précisé à la question #1, il n'est pas possible de passer une contrainte d'intégrale à `OptimalControl.jl`, il faut donc reformuler la contrainte et la même approche utilisée à la question 1 peut être utilisée.
+
+\begin{align*}
+\dot{z}(t) & = \sqrt{1 + \dot{x}(t)^2} \\ 
+& \to \int_0^1 \dot{z}(t) dt = L \\
+& \to z(1) - z(0) = L\\
+\end{align*}
+
+La variable de contrôle $u(t)$ est définie telle que : 
+
+\begin{align*}
+u(t) = \dot{x}(t)
+\end{align*}
+
+
 ```{julia}
 # votre code ici
+
+
+a = 2.0   # height of the initial point
+b = 1.0   # heigh of the end point
+
+L = 3.5   # total length of the chord
+
+t0 = 0.0  # initial timestep (not really the time -> it's the position along the x axis)
+t1 = 1.0  # final timestep
+
+ρ = 1.0   # density of the chord
+g = 9.81  # gravity's constant
+
+ocp = @def begin
+  t ∈ [t0, t1], time
+  x ∈ R^2, state    # we have to add an extra state for z
+  u ∈ R, control
+
+  x(t0) == [a, 0.0]   # z(0) = 0
+  x(t1) == [b, L]     # z(1) = L -> z(1) - z(0) = L
+
+  ẋ(t) == [u(t), √(1 + u(t)^2)]
+
+  # objective function
+  ∫( ρ * g * x(t)[1] * √(1 + u(t)^2) ) → min
+
+end
+
+sol = solve(ocp, max_iter = 1000, tol = 1.0e-4, print_level=5, print_frequency_iter=20)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
 # votre code ici
+plot(sol)
 ```
 
 #### Commenter les résultats
+
+Par intuition, il est possible de remarquer que la $x(t)$ ($x_1$ sur la figure) suit la forme qu'une corde au repos attacher à ses 2 extrémités ressemblerait. Les conditions frontières sont respectées, c'est-à-dire $x_1(0) = 2$ et $x_1(1) = 1$. Les conditions frontières imposées pour $x_2$ sont aussi respectées. La solution est donc vérifiée. Même c'est Ipopt renvoie des avertissements au début de l'optimisation, le solveur est tout de même capable de converger.
 
 # Questions 3
 
 #### Modéliser et résoudre numériquement le problème des réservoirs du devoir 5.
 
+Pour le problème du réservoir, nous sommes intéressés à **maximiser** la quantité d'eau dans le dernier réservoir ($x_2$) tout s'assurer que le niveau d'eau dans le premier réservoir soit à 50% à l'instant $t_f=1$. Le problème peut s'écrire :
+
+\begin{align*}
+\max_u & \quad x_2(t_f) \\
+s.c. & \quad \dot{x}_1(t) = -x_1(t) + u(t) \\
+& \quad \dot{x}_2(t) = x_1(t) \\
+& \quad x_1(t_i) = 0 \quad x_2(t_i) = 0 \\
+& \quad x_1(t_f) = 0.5 \\
+& \quad x_1(t) \geq 0 \quad x_2(t) \geq 0 \\
+\end{align*}
+
 ```{julia}
 # votre code ici
+
+
+ti = 0.0
+tf = 1.0
+
+ocp = @def begin
+  t ∈ [ti, tf], time
+  x ∈ R^2, state
+  u ∈ R, control
+
+  # The tanks are initialy empty
+  x(ti) == [0.0, 0.0]
+  x₁(tf) == 0.5       # the first tank must be 50% full at t_final
+
+  # water qty cannot be negative at any given time
+  x(t) >= [0.0, 0.0]
+
+  # flow constraints
+  ẋ(t) == [-x₁(t) + u₁(t), x₁(t)]
+
+  # control command must be between 0 and 1
+  0.0 ≤ u(t) ≤ 1.0 
+
+  x₂(tf) → max
+end
+
+sol = solve(ocp, max_iter = 100, tol = 1.0e-5, print_level=5, print_frequency_iter=20)
 ```
 
 #### Afficher graphiquement les états, commandes et états adjoints finaux.
 
 ```{julia}
 # votre code ici
+plot(sol)
 ```
 
 #### Commenter les résultats
+
+Premièrement, il est possible de vérifier les conditions frontières. À l'instant initiale, les 2 réservoirs sont vides. À l'instant final, le premier réservoir est 50% plein. De plus, la commande $u(t)$ est de type "bang-bang", c'est-à-dire que la commande est soit 1 ou soit 0. Lorsque la commande devient 0 autour de $t=0.8$, on constate que la quantité d'eau dans le réservoir 1 baisse. Cela est attendu puisque si il n'y a aucune eau qui rentre dans le réservoir, le niveau peut seulement baisser pour aller vers le réservoir 2. Le résultat est donc vérifié.
 
